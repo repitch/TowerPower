@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">TowerPower</string>
+
+    <string name="gmaps_api_key">AIzaSyB_vH9vEzW4VxYk2Xh7knaA_jxWy4Kk-d4</string>
+</resources>
