@@ -3,6 +3,7 @@ package com.repitch.towerpower;
 import android.Manifest;
 import android.app.ProgressDialog;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
 import android.os.Bundle;
@@ -14,22 +15,27 @@ import android.telephony.gsm.GsmCellLocation;
 import android.widget.Button;
 import android.widget.TextView;
 
+import com.google.android.gms.maps.model.LatLng;
 import com.repitch.towerpower.api.Connectivity;
 import com.repitch.towerpower.api.LocationRequest;
 import com.repitch.towerpower.api.LocationRequestManager;
 import com.repitch.towerpower.api.RetrofitManager;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import rx.android.schedulers.AndroidSchedulers;
 import rx.schedulers.Schedulers;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final int MY_PERMISSIONS_REQUEST_READ_CONTACTS = 1;
+    private static final int REQUEST_CODE_ALL_PERMISSIONS = 1;
 
     private ProgressDialog progressDialog;
     private TextView txtLocationInfo;
     private Button retryBtn;
     private Button openMap;
+    private LatLng cellPosition;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -39,32 +45,41 @@ public class MainActivity extends AppCompatActivity {
         retryBtn = (Button) findViewById(R.id.btn_retry);
         retryBtn.setOnClickListener(v -> retry());
         openMap = (Button) findViewById(R.id.btn_open_map);
-        openMap.setOnClickListener(v -> startActivity(MapActivity.createIntent(this)));
+        openMap.setOnClickListener(v -> startActivity(MapActivity.createIntent(this, cellPosition)));
 
-        if (ContextCompat.checkSelfPermission(this,
-                Manifest.permission.READ_PHONE_STATE)
-                != PackageManager.PERMISSION_GRANTED) {
+        retry();
+    }
 
-            // Should we show an explanation?
-            if (ActivityCompat.shouldShowRequestPermissionRationale(this,
-                    Manifest.permission.READ_PHONE_STATE)) {
-
-                // Show an explanation to the user *asynchronously* -- don't block
-                // this thread waiting for the user's response! After the user
-                // sees the explanation, try again to request the permission.
-
-            } else {
-                ActivityCompat.requestPermissions(this,
-                        new String[]{Manifest.permission.READ_CONTACTS},
-                        MY_PERMISSIONS_REQUEST_READ_CONTACTS);
-            }
-        } else {
-            getNWInfo(this);
-        }
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        retry();
     }
 
     private void retry() {
-        getNWInfo(this);
+        List<String> permissions = new ArrayList<>();
+        String[] neededPermissions = {
+                Manifest.permission.READ_PHONE_STATE,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+                Manifest.permission.ACCESS_NETWORK_STATE,
+                Manifest.permission.INTERNET
+        };
+        for (String permission : neededPermissions) {
+            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                if (ActivityCompat.shouldShowRequestPermissionRationale(this, permission)) {
+                    // todo shit here
+                    permissions.add(permission);
+                } else {
+                    permissions.add(permission);
+                }
+            }
+        }
+        if (permissions.isEmpty()) {
+            getNWInfo(this);
+        } else {
+            String[] perm = new String[permissions.size()];
+            ActivityCompat.requestPermissions(this, permissions.toArray(perm), REQUEST_CODE_ALL_PERMISSIONS);
+        }
     }
 
     private void getNWInfo(Context context) {
@@ -148,6 +163,7 @@ public class MainActivity extends AppCompatActivity {
         );
 
         progressDialog = new ProgressDialog(this);
+        progressDialog.setMessage("Подождите...");
         progressDialog.show();
 //        LocationRequest request = LocationRequestManager.generateMock();
         LocationRequest request = LocationRequestManager.generateRequest(radioType, mcc, mnc, new_lac, new_cid);
@@ -157,6 +173,9 @@ public class MainActivity extends AppCompatActivity {
                 .observeOn(AndroidSchedulers.mainThread())
                 .doAfterTerminate(progressDialog::hide)
                 .subscribe(locationInfo -> {
+                    if (locationInfo.getLat() != null && locationInfo.getLon() != null) {
+                        cellPosition = new LatLng(locationInfo.getLat(), locationInfo.getLon());
+                    }
                     txtLocationInfo.setText(locationInfo.toString());
                 });
 

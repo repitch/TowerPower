@@ -18,10 +18,13 @@ import com.google.android.gms.maps.model.MarkerOptions;
  */
 public class MapActivity extends AppCompatActivity implements OnMapReadyCallback {
 
+    private static final String EXTRA_POSITION = "position";
+
     private GoogleMap mMap;
 
-    public static Intent createIntent(Context context) {
-        return new Intent(context, MapActivity.class);
+    public static Intent createIntent(Context context, @Nullable LatLng position) {
+        return new Intent(context, MapActivity.class)
+                .putExtra(EXTRA_POSITION, position);
     }
 
     @Override
@@ -38,9 +41,12 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
         mMap = googleMap;
 
         // Add a marker in Sydney, Australia, and move the camera.
-        LatLng sydney = new LatLng(-34, 151);
-        mMap.addMarker(new MarkerOptions().position(sydney).title("Marker in Sydney"));
-        mMap.moveCamera(CameraUpdateFactory.newLatLng(sydney));
+        LatLng position = getIntent().getParcelableExtra(EXTRA_POSITION);
+        if (position != null) {
+            mMap.addMarker(new MarkerOptions().position(position).title("Here is BS"));
+            mMap.moveCamera(CameraUpdateFactory.newLatLng(position));
+            mMap.moveCamera(CameraUpdateFactory.zoomTo(15.0f));
+        }
 
     }
 }

@@ -9,18 +9,27 @@ public class LocationInfo {
     @SerializedName("status")
     @Expose
     private String status;
+
+    @SerializedName("message")
+    @Expose
+    private String message;
+
     @SerializedName("balance")
     @Expose
     private Integer balance;
+
     @SerializedName("lat")
     @Expose
     private Double lat;
+
     @SerializedName("lon")
     @Expose
     private Double lon;
+
     @SerializedName("accuracy")
     @Expose
     private Integer accuracy;
+
     @SerializedName("address")
     @Expose
     private String address;
@@ -31,6 +40,14 @@ public class LocationInfo {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
     }
 
     public Integer getBalance() {
@@ -76,6 +93,7 @@ public class LocationInfo {
     @Override
     public String toString() {
         return "status: " + status + "\n" +
+                "message: " + message + "\n" +
                 "balance: " + balance + "\n" +
                 "lat: " + lat + " lon: " + lon + "\n" +
                 "accuracy: " + accuracy + "\n" +
