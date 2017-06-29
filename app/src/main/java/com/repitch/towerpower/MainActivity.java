@@ -10,13 +10,16 @@ import android.os.Bundle;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
+import android.telephony.PhoneStateListener;
+import android.telephony.SignalStrength;
 import android.telephony.TelephonyManager;
 import android.telephony.gsm.GsmCellLocation;
 import android.widget.Button;
 import android.widget.TextView;
 
 import com.google.android.gms.maps.model.LatLng;
-import com.repitch.towerpower.api.Connectivity;
+import com.repitch.towerpower.connection.ConnectionUtils;
+import com.repitch.towerpower.connection.Connectivity;
 import com.repitch.towerpower.api.LocationRequest;
 import com.repitch.towerpower.api.LocationRequestManager;
 import com.repitch.towerpower.api.RetrofitManager;
@@ -33,15 +36,20 @@ public class MainActivity extends AppCompatActivity {
 
     private ProgressDialog progressDialog;
     private TextView txtLocationInfo;
+    private TextView txtSignal;
     private Button retryBtn;
     private Button openMap;
     private LatLng cellPosition;
+
+    private int signalStrength;
+    private PhoneStateListener phoneStateListener;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         txtLocationInfo = (TextView) findViewById(R.id.txt_location_info);
+        txtSignal = (TextView) findViewById(R.id.txt_signal);
         retryBtn = (Button) findViewById(R.id.btn_retry);
         retryBtn.setOnClickListener(v -> retry());
         openMap = (Button) findViewById(R.id.btn_open_map);
@@ -82,6 +90,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+
     private void getNWInfo(Context context) {
         /**
          * <uses-permission android:name="android.permission.READ_PHONE_STATE"
@@ -91,6 +100,26 @@ public class MainActivity extends AppCompatActivity {
 
         TelephonyManager telephonyManager = (TelephonyManager) context
                 .getSystemService(Context.TELEPHONY_SERVICE);
+
+        if (phoneStateListener == null) {
+            phoneStateListener = new PhoneStateListener() {
+                @Override
+                public void onSignalStrengthsChanged(SignalStrength signalStrength) {
+                    super.onSignalStrengthsChanged(signalStrength);
+
+                    TelephonyManager telephonyManager = (TelephonyManager) context
+                            .getSystemService(Context.TELEPHONY_SERVICE);
+                    int networkType = telephonyManager.getNetworkType();
+                    String radioType = Connectivity.getRadioType(networkType);
+
+                    int asu = ConnectionUtils.getStrengthAsAsu(radioType, signalStrength);
+                    int dbm = ConnectionUtils.getStrengthAsRssi(radioType, signalStrength);
+                    setSignalStrength(asu, dbm);
+                }
+            };
+            telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_SIGNAL_STRENGTHS);
+        }
+
         String networkOperator = telephonyManager.getNetworkOperator();
         int mcc = 0, mnc = 0;
         if (networkOperator != null && networkOperator.length() > 3) {
@@ -98,9 +127,6 @@ public class MainActivity extends AppCompatActivity {
             mnc = Integer.parseInt(networkOperator.substring(3));
         }
 
-        String SimNumber = telephonyManager.getLine1Number();
-
-        String SimSerialNumber = telephonyManager.getSimSerialNumber();
         String countryISO = telephonyManager.getSimCountryIso();
         String operatorName = telephonyManager.getSimOperatorName();
         String operator = telephonyManager.getSimOperator();
@@ -147,9 +173,8 @@ public class MainActivity extends AppCompatActivity {
 
                 "\n" + "countryISO : " + countryISO + "\n" + "operatorName : "
                 + operatorName + "\n" + "operator :      " + operator + "\n"
-                + "simState :" + simState + "\n" + "Sim Serial Number : "
-                + SimSerialNumber + "\n" + "Sim Number : " + SimNumber + "\n"
-                + "Voice Mail Numer" + voicemailNumer + "\n"
+                + "simState :" + simState + "\n"
+                + "Voice Mail Number" + voicemailNumer + "\n"
                 + "Voice Mail Alpha Tag" + voicemailAlphaTag + "\n"
                 + "Sim State" + simState + "\n" + "Mobile Country Code MCC : "
                 + mcc + "\n" + "Mobile Network Code MNC : " + mnc + "\n"
@@ -159,7 +184,7 @@ public class MainActivity extends AppCompatActivity {
                 + "Network Type : " + Connectivity.networkTypeAsString(networkType) + "\n"
                 + cidLacString + "\n"
                 + "Network class: " + Connectivity.getNetworkClassAsString(networkType)
-                + "Radio type: " + radioType
+                + "\nRadio type: " + radioType
         );
 
         progressDialog = new ProgressDialog(this);
@@ -180,5 +205,10 @@ public class MainActivity extends AppCompatActivity {
                 });
 
 
+    }
+
+    private void setSignalStrength(int asu, int dbm) {
+        this.signalStrength = dbm;
+        txtSignal.setText(String.format("%ddb %dasu", dbm, asu));
     }
 }

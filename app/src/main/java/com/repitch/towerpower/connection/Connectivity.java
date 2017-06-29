@@ -1,4 +1,4 @@
-package com.repitch.towerpower.api;
+package com.repitch.towerpower.connection;
 
 import android.content.Context;
 import android.net.ConnectivityManager;
