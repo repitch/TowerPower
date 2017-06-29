@@ -1,11 +1,11 @@
-package com.repitch.towerpower;
+package com.repitch.towerpower.ui;
 
 import android.Manifest;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.net.ConnectivityManager;
+import android.location.Location;
 import android.os.Bundle;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
@@ -17,12 +17,16 @@ import android.telephony.gsm.GsmCellLocation;
 import android.widget.Button;
 import android.widget.TextView;
 
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.model.LatLng;
-import com.repitch.towerpower.connection.ConnectionUtils;
-import com.repitch.towerpower.connection.Connectivity;
+import com.repitch.towerpower.Property;
+import com.repitch.towerpower.R;
 import com.repitch.towerpower.api.LocationRequest;
 import com.repitch.towerpower.api.LocationRequestManager;
 import com.repitch.towerpower.api.RetrofitManager;
+import com.repitch.towerpower.connection.ConnectionUtils;
+import com.repitch.towerpower.connection.Connectivity;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,11 +41,18 @@ public class MainActivity extends AppCompatActivity {
     private ProgressDialog progressDialog;
     private TextView txtLocationInfo;
     private TextView txtSignal;
+    private TextView txtLat;
+    private TextView txtLon;
+
     private Button retryBtn;
     private Button openMap;
     private LatLng cellPosition;
+    private int accuracy;
+
+    private FusedLocationProviderClient fusedLocationProviderClient;
 
     private int signalStrength;
+    private List<Property> properties;
     private PhoneStateListener phoneStateListener;
 
     @Override
@@ -50,11 +61,13 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         txtLocationInfo = (TextView) findViewById(R.id.txt_location_info);
         txtSignal = (TextView) findViewById(R.id.txt_signal);
+        txtLat = (TextView) findViewById(R.id.txt_lat);
+        txtLon = (TextView) findViewById(R.id.txt_lon);
         retryBtn = (Button) findViewById(R.id.btn_retry);
         retryBtn.setOnClickListener(v -> retry());
         openMap = (Button) findViewById(R.id.btn_open_map);
-        openMap.setOnClickListener(v -> startActivity(MapActivity.createIntent(this, cellPosition)));
-
+        openMap.setOnClickListener(v -> startActivity(MapActivity.createIntent(this, cellPosition, accuracy)));
+        findViewById(R.id.btn_get_location).setOnClickListener(v -> updateCurrentLocation());
         retry();
     }
 
@@ -69,6 +82,7 @@ public class MainActivity extends AppCompatActivity {
         String[] neededPermissions = {
                 Manifest.permission.READ_PHONE_STATE,
                 Manifest.permission.ACCESS_COARSE_LOCATION,
+                Manifest.permission.ACCESS_FINE_LOCATION,
                 Manifest.permission.ACCESS_NETWORK_STATE,
                 Manifest.permission.INTERNET
         };
@@ -92,12 +106,6 @@ public class MainActivity extends AppCompatActivity {
 
 
     private void getNWInfo(Context context) {
-        /**
-         * <uses-permission android:name="android.permission.READ_PHONE_STATE"
-         * /> <uses-permission
-         * android:name="android.permission.ACCESS_NETWORK_STATE"/>
-         */
-
         TelephonyManager telephonyManager = (TelephonyManager) context
                 .getSystemService(Context.TELEPHONY_SERVICE);
 
@@ -115,11 +123,13 @@ public class MainActivity extends AppCompatActivity {
                     int asu = ConnectionUtils.getStrengthAsAsu(radioType, signalStrength);
                     int dbm = ConnectionUtils.getStrengthAsRssi(radioType, signalStrength);
                     setSignalStrength(asu, dbm);
+                    updateCurrentLocation();
                 }
             };
             telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_SIGNAL_STRENGTHS);
         }
 
+        Connectivity connectivity = new Connectivity(this);
         String networkOperator = telephonyManager.getNetworkOperator();
         int mcc = 0, mnc = 0;
         if (networkOperator != null && networkOperator.length() > 3) {
@@ -129,11 +139,8 @@ public class MainActivity extends AppCompatActivity {
 
         String countryISO = telephonyManager.getSimCountryIso();
         String operatorName = telephonyManager.getSimOperatorName();
-        String operator = telephonyManager.getSimOperator();
+        String simOperator = telephonyManager.getSimOperator();
         int simState = telephonyManager.getSimState();
-
-        String voicemailNumer = telephonyManager.getVoiceMailNumber();
-        String voicemailAlphaTag = telephonyManager.getVoiceMailAlphaTag();
 
         // Getting connected network iso country code
         String networkCountry = telephonyManager.getNetworkCountryIso();
@@ -144,52 +151,39 @@ public class MainActivity extends AppCompatActivity {
 
         int networkType = telephonyManager.getNetworkType();
 
-        String network = "";
-        ConnectivityManager cm = (ConnectivityManager) context
-                .getSystemService(Context.CONNECTIVITY_SERVICE);
-        try {
-            if (cm.getActiveNetworkInfo().getTypeName().equals("MOBILE"))
-                network = "Cell Network/3G";
-            else if (cm.getActiveNetworkInfo().getTypeName().equals("WIFI"))
-                network = "WiFi";
-            else
-                network = "N/A";
-        } catch (Exception e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
+        String network = connectivity.getNetworkTypeName();
 
         GsmCellLocation cellLocation = (GsmCellLocation) telephonyManager.getCellLocation();
 
         int new_cid = cellLocation.getCid() & 0xffff;
         int new_lac = cellLocation.getLac() & 0xffff;
 
-        String cidLacString = String.format("CID: %d\nLAC: %d\n", new_cid, new_lac);
-
         String radioType = Connectivity.getRadioType(networkType);
 
         TextView textView = (TextView) findViewById(R.id.text_view);
-        textView.setText("network :" + network +
+        properties = new ArrayList<>();
+        properties.add(new Property("network", network));
+        properties.add(new Property("countryISO", countryISO));
+        properties.add(new Property("operatorName", operatorName));
+        properties.add(new Property("simState", String.valueOf(simState)));
+        properties.add(new Property("simOperator", simOperator));
+        properties.add(new Property("MCC", String.valueOf(mcc)));
+        properties.add(new Property("MNC", String.valueOf(mnc)));
+        properties.add(new Property("network country", networkCountry));
+        properties.add(new Property("network OperatorId", networkOperatorId));
+        properties.add(new Property("network name", networkName));
+        properties.add(new Property("network type", Connectivity.networkTypeAsString(networkType)));
+        properties.add(new Property("CID", String.valueOf(new_cid)));
+        properties.add(new Property("LAC", String.valueOf(new_lac)));
+        properties.add(new Property("network class", Connectivity.getNetworkClassAsString(networkType)));
+        properties.add(new Property("radio type", radioType));
 
-                "\n" + "countryISO : " + countryISO + "\n" + "operatorName : "
-                + operatorName + "\n" + "operator :      " + operator + "\n"
-                + "simState :" + simState + "\n"
-                + "Voice Mail Number" + voicemailNumer + "\n"
-                + "Voice Mail Alpha Tag" + voicemailAlphaTag + "\n"
-                + "Sim State" + simState + "\n" + "Mobile Country Code MCC : "
-                + mcc + "\n" + "Mobile Network Code MNC : " + mnc + "\n"
-                + "Network Country : " + networkCountry + "\n"
-                + "Network OperatorId : " + networkOperatorId + "\n"
-                + "Network Name : " + networkName + "\n"
-                + "Network Type : " + Connectivity.networkTypeAsString(networkType) + "\n"
-                + cidLacString + "\n"
-                + "Network class: " + Connectivity.getNetworkClassAsString(networkType)
-                + "\nRadio type: " + radioType
-        );
+        textView.setText(Property.propertiesToString(properties));
 
         progressDialog = new ProgressDialog(this);
         progressDialog.setMessage("Подождите...");
         progressDialog.show();
+        openMap.setEnabled(false);
 //        LocationRequest request = LocationRequestManager.generateMock();
         LocationRequest request = LocationRequestManager.generateRequest(radioType, mcc, mnc, new_lac, new_cid);
         RetrofitManager.getInterface()
@@ -200,6 +194,8 @@ public class MainActivity extends AppCompatActivity {
                 .subscribe(locationInfo -> {
                     if (locationInfo.getLat() != null && locationInfo.getLon() != null) {
                         cellPosition = new LatLng(locationInfo.getLat(), locationInfo.getLon());
+                        accuracy = locationInfo.getAccuracy();
+                        openMap.setEnabled(true);
                     }
                     txtLocationInfo.setText(locationInfo.toString());
                 });
@@ -210,5 +206,17 @@ public class MainActivity extends AppCompatActivity {
     private void setSignalStrength(int asu, int dbm) {
         this.signalStrength = dbm;
         txtSignal.setText(String.format("%ddb %dasu", dbm, asu));
+    }
+
+    public void updateCurrentLocation() {
+        if (fusedLocationProviderClient == null) {
+            fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
+        }
+        fusedLocationProviderClient.getLastLocation().addOnSuccessListener(this, this::setCurrentLocation);
+    }
+
+    private void setCurrentLocation(Location location) {
+        txtLat.setText(String.format("lat: %.4f", location.getLatitude()));
+        txtLon.setText(String.format("lon: %.4f", location.getLongitude()));
     }
 }

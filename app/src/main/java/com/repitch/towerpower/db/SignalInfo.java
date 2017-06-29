@@ -9,7 +9,7 @@ public class SignalInfo implements Serializable {
 
     private String operatorName;
 
-    // TelephonyManager#getNetworkType()
+    // TelephonyManager#getNetworkTypeName()
     private String networkType;
 
     // Connectivity#getNetworkClassAsString(int networkType)
