@@ -5,4 +5,6 @@
     <color name="colorAccent">#FF4081</color>
     <color name="mapCircleStroke">#5e74e2</color>
     <color name="mapCircleFill">#335e74e2</color>
+    <color name="success">#336e3f</color>
+    <color name="error">#f00</color>
 </resources>

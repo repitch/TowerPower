@@ -17,6 +17,20 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal">
 
+            <Button
+                android:id="@+id/btn_track_history"
+                style="?borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="История"/>
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
             <TextView
                 android:id="@+id/text_view"
                 android:layout_width="0dp"
@@ -60,6 +74,12 @@
                     android:layout_height="wrap_content"
                     tools:text="lon: %d"/>
 
+                <TextView
+                    android:id="@+id/txt_tracks_count"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Tracks: 0"/>
+
             </LinearLayout>
 
         </LinearLayout>
@@ -77,6 +97,13 @@
             android:layout_height="wrap_content"
             android:gravity="right"
             android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btn_track"
+                style="?borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Track"/>
 
             <Button
                 android:id="@+id/btn_get_location"

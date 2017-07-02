@@ -3,6 +3,7 @@ package com.repitch.towerpower.api;
 
 import com.google.gson.annotations.Expose;
 import com.google.gson.annotations.SerializedName;
+import com.repitch.towerpower.api.cell.Cell;
 
 import java.util.List;
 

@@ -10,6 +10,7 @@ import android.os.Bundle;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
+import android.telephony.NeighboringCellInfo;
 import android.telephony.PhoneStateListener;
 import android.telephony.SignalStrength;
 import android.telephony.TelephonyManager;
@@ -25,8 +26,10 @@ import com.repitch.towerpower.R;
 import com.repitch.towerpower.api.LocationRequest;
 import com.repitch.towerpower.api.LocationRequestManager;
 import com.repitch.towerpower.api.RetrofitManager;
+import com.repitch.towerpower.api.cell.Cell;
 import com.repitch.towerpower.connection.ConnectionUtils;
 import com.repitch.towerpower.connection.Connectivity;
+import com.repitch.towerpower.db.TrackInfoRepository;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,7 +37,7 @@ import java.util.List;
 import rx.android.schedulers.AndroidSchedulers;
 import rx.schedulers.Schedulers;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements SignalTracker.TrackListener {
 
     private static final int REQUEST_CODE_ALL_PERMISSIONS = 1;
 
@@ -45,20 +48,32 @@ public class MainActivity extends AppCompatActivity {
     private TextView txtLon;
 
     private Button retryBtn;
+    private Button btnTracksHistory;
     private Button openMap;
+    private Button trackBtn;
     private LatLng cellPosition;
+    private List<NeighboringCellInfo> neighboringCellInfos;
     private int accuracy;
 
     private FusedLocationProviderClient fusedLocationProviderClient;
 
-    private int signalStrength;
+    private SignalTracker signalTracker;
+
+    private int signalAsu;
+    private int signalDbm;
     private List<Property> properties;
     private PhoneStateListener phoneStateListener;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        signalTracker = new SignalTracker(this, new TrackInfoRepository(), this);
+
         setContentView(R.layout.activity_main);
+        btnTracksHistory = (Button) findViewById(R.id.btn_track_history);
+        btnTracksHistory.setOnClickListener(v -> startActivity(TrackHistoryActivity.createIntent(this)));
+        trackBtn = (Button) findViewById(R.id.btn_track);
+        trackBtn.setOnClickListener(v -> signalTracker.track(signalAsu));
         txtLocationInfo = (TextView) findViewById(R.id.txt_location_info);
         txtSignal = (TextView) findViewById(R.id.txt_signal);
         txtLat = (TextView) findViewById(R.id.txt_lat);
@@ -142,6 +157,8 @@ public class MainActivity extends AppCompatActivity {
         String simOperator = telephonyManager.getSimOperator();
         int simState = telephonyManager.getSimState();
 
+        neighboringCellInfos = telephonyManager.getNeighboringCellInfo();
+
         // Getting connected network iso country code
         String networkCountry = telephonyManager.getNetworkCountryIso();
         // Getting the connected network operator ID
@@ -155,8 +172,12 @@ public class MainActivity extends AppCompatActivity {
 
         GsmCellLocation cellLocation = (GsmCellLocation) telephonyManager.getCellLocation();
 
-        int new_cid = cellLocation.getCid() & 0xffff;
-        int new_lac = cellLocation.getLac() & 0xffff;
+        int new_cid = 0;
+        int new_lac = 0;
+        if (cellLocation != null) {
+            new_cid = cellLocation.getCid() & 0xffff;
+            new_lac = cellLocation.getLac() & 0xffff;
+        }
 
         String radioType = Connectivity.getRadioType(networkType);
 
@@ -177,6 +198,7 @@ public class MainActivity extends AppCompatActivity {
         properties.add(new Property("LAC", String.valueOf(new_lac)));
         properties.add(new Property("network class", Connectivity.getNetworkClassAsString(networkType)));
         properties.add(new Property("radio type", radioType));
+        properties.add(new Property("neighbors", generateShortNeighboursText(neighboringCellInfos)));
 
         textView.setText(Property.propertiesToString(properties));
 
@@ -184,8 +206,18 @@ public class MainActivity extends AppCompatActivity {
         progressDialog.setMessage("Подождите...");
         progressDialog.show();
         openMap.setEnabled(false);
-//        LocationRequest request = LocationRequestManager.generateMock();
-        LocationRequest request = LocationRequestManager.generateRequest(radioType, mcc, mnc, new_lac, new_cid);
+
+        List<Cell> cells = new ArrayList<>();
+        Cell baseCell = Cell.from(new_lac, new_cid, radioType);
+        if (signalAsu > 0) {
+            baseCell.setAsu(signalAsu);
+        }
+        cells.add(baseCell);
+        for (NeighboringCellInfo cellInfo : neighboringCellInfos) {
+            String radio = Connectivity.getRadioType(cellInfo.getNetworkType());
+            cells.add(Cell.from(cellInfo.getLac(), cellInfo.getCid(), radio));
+        }
+        LocationRequest request = LocationRequestManager.generateRequest(radioType, mcc, mnc, cells);
         RetrofitManager.getInterface()
                 .getLocationInfo(request)
                 .subscribeOn(Schedulers.io())
@@ -198,13 +230,24 @@ public class MainActivity extends AppCompatActivity {
                         openMap.setEnabled(true);
                     }
                     txtLocationInfo.setText(locationInfo.toString());
+                    txtLocationInfo.setTextColor(ContextCompat.getColor(MainActivity.this, locationInfo.isSuccessful() ? R.color.success : R.color.error));
                 });
+    }
 
-
+    private String generateShortNeighboursText(List<NeighboringCellInfo> neighboringCellInfos) {
+        if (neighboringCellInfos.isEmpty()) {
+            return "nothing";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (NeighboringCellInfo info : neighboringCellInfos) {
+            sb.append(String.format("[cid: %d lac: %d] ", info.getCid(), info.getLac()));
+        }
+        return sb.toString();
     }
 
     private void setSignalStrength(int asu, int dbm) {
-        this.signalStrength = dbm;
+        signalAsu = asu;
+        signalDbm = dbm;
         txtSignal.setText(String.format("%ddb %dasu", dbm, asu));
     }
 
@@ -218,5 +261,10 @@ public class MainActivity extends AppCompatActivity {
     private void setCurrentLocation(Location location) {
         txtLat.setText(String.format("lat: %.4f", location.getLatitude()));
         txtLon.setText(String.format("lon: %.4f", location.getLongitude()));
+    }
+
+    @Override
+    public void onTrackSuccess(int tracksCount) {
+        ((TextView) findViewById(R.id.txt_tracks_count)).setText("Tracks: " + tracksCount);
     }
 }

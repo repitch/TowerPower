@@ -6,17 +6,36 @@ import com.google.gson.annotations.SerializedName;
 
 public class LocationInfo {
 
+    /**
+     * If the request is successful, ok is returned. Otherwise error is returned
+     */
     @SerializedName("status")
     @Expose
     private String status;
 
+    /**
+     * Any additional information from the server is returned here
+     */
     @SerializedName("message")
     @Expose
     private String message;
 
+    /**
+     * This represents the remaining balance on the API token.
+     * Requests that return "error" are not charged and do not affect balance
+     */
     @SerializedName("balance")
     @Expose
     private Integer balance;
+
+    /**
+     * This represents the remaining balance of device slots. Requests that return "error" are
+     * not charged and do not affect balance. If -1 is returned, then observe it as an error
+     * while calculating slots balance. This element will only exist if you are on a device plan.
+     */
+    @SerializedName("balance_slots")
+    @Expose
+    private Integer balanceSlots;
 
     @SerializedName("lat")
     @Expose
@@ -26,13 +45,41 @@ public class LocationInfo {
     @Expose
     private Double lon;
 
+    /**
+     * The accuracy of the position is returned in meters
+     */
     @SerializedName("accuracy")
     @Expose
     private Integer accuracy;
 
+    /**
+     * The physical address of the location
+     */
     @SerializedName("address")
     @Expose
     private String address;
+
+    /**
+     * The physical address of the location broken into sub-components
+     */
+    @SerializedName("address_details")
+    @Expose
+    private AddressDetails addressDetails;
+
+    /**
+     * Shown when the location is based on a single measurement or those older
+     * than 90 days or is an LAC fallback.
+     */
+    @SerializedName("aged")
+    @Expose
+    private String aged;
+
+    /**
+     * Shown when the location is based on a fallback. Possible options include ipf, lacf, scf
+     */
+    @SerializedName("fallback")
+    @Expose
+    private String fallback;
 
     public String getStatus() {
         return status;
@@ -90,6 +137,10 @@ public class LocationInfo {
         this.address = address;
     }
 
+    public boolean isSuccessful() {
+        return "ok".equals(status);
+    }
+
     @Override
     public String toString() {
         return "status: " + status + "\n" +
@@ -97,6 +148,8 @@ public class LocationInfo {
                 "balance: " + balance + "\n" +
                 "lat: " + lat + " lon: " + lon + "\n" +
                 "accuracy: " + accuracy + "\n" +
-                "address: " + address + "\n";
+                "address: " + address + "\n" +
+                "aged: " + aged + "\n" +
+                "fallback: " + fallback + "\n";
     }
 }
